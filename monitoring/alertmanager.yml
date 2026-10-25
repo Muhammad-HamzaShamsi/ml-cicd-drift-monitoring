@@ -1,0 +1,15 @@
+route:
+  receiver: default
+  group_by: [alertname]
+  group_wait: 30s
+  repeat_interval: 12h
+
+receivers:
+  - name: default
+    # Replace with a real receiver, e.g. Slack:
+    # slack_configs:
+    #   - api_url: https://hooks.slack.com/services/XXX
+    #     channel: "#ml-alerts"
+    webhook_configs:
+      - url: http://localhost:5001/alerts
+        send_resolved: true

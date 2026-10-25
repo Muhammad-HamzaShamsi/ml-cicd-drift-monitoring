@@ -1,0 +1,22 @@
+groups:
+  - name: data-drift
+    rules:
+      - alert: DatasetDriftDetected
+        expr: drift_dataset_detected == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data drift detected ({{ $value }})"
+          description: "Share of drifted features exceeded the threshold. Consider retraining."
+      - alert: FeatureSevereDrift
+        expr: drift_feature_psi > 0.25
+        labels:
+          severity: info
+        annotations:
+          summary: "Feature {{ $labels.feature }} PSI={{ $value | printf \"%.2f\" }}"
+      - alert: DriftJobStale
+        expr: time() - push_time_seconds{job="drift_monitor"} > 2 * 86400
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drift monitor has not reported for 2 days"
