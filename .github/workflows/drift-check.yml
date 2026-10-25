@@ -1,0 +1,54 @@
+name: Scheduled drift check
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      drift_level:
+        description: "Simulated drift (0 = none, 1 = strong)"
+        default: "0"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # In production, replace this step with an export of last day's inference logs.
+      - name: Prepare data
+        run: python -m drift.simulate --out data --drift "${{ github.event.inputs.drift_level || '0' }}"
+
+      - name: Detect drift
+        id: detect
+        run: |
+          set +e
+          python -m drift.detect --reference data/reference.csv --current data/current.csv --out reports
+          code=$?
+          set -e
+          echo "drift=$([ $code -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          [ $code -eq 0 ] || [ $code -eq 2 ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: reports/
+
+      - name: Open issue on drift
+        if: steps.detect.outputs.drift == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          features=$(python -c "import json;print(', '.join(json.load(open('reports/drift_report.json'))['drifted_features'][:10]))")
+          gh issue create \
+            --title "Data drift detected ($(date -u +%F))" \
+            --body "Drifted features: ${features}. Report: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
